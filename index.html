@@ -1106,13 +1106,17 @@ function drawUnits() {
 fit();
 requestAnimationFrame(frame);
 
-function offline() {
+function offline(err) {
+  if (err && err.message === 'login') return;
+  /* the server answered but with a problem: show its words instead of guessing */
+  var said = err && err.fromServer ? err.message : null;
   document.getElementById('led').className = 'led bad';
-  document.getElementById('linktext').textContent = 'server mati';
+  document.getElementById('linktext').textContent = said ? 'ada masalah' : 'server mati';
   document.getElementById('linktext').classList.add('lost');
-  if (!everLoaded) {
-    document.getElementById('units').innerHTML =
-      '<div class="none lost"><b>Tidak bisa menghubungi server.</b>Jalankan npm run dashboard, lalu muat ulang.</div>';
+  if (!everLoaded || said) {
+    document.getElementById('units').innerHTML = said
+      ? '<div class="none lost"><b>Server menjawab dengan error.</b>' + said.replace(/</g, '&lt;') + '</div>'
+      : '<div class="none lost"><b>Tidak bisa menghubungi server.</b>Jalankan npm run dashboard, lalu muat ulang.</div>';
   }
 }
 
@@ -1120,6 +1124,11 @@ function tick() {
   fetch('/api/state').then(function (r) {
     /* online version: no session means go log in */
     if (r.status === 401) { location.replace('/login.html'); throw new Error('login'); }
+    if (!r.ok) {
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        var e = new Error(d.error || ('HTTP ' + r.status)); e.fromServer = true; throw e;
+      });
+    }
     return r.json();
   }).then(function (s) {
     everLoaded = true;
@@ -1194,7 +1203,7 @@ function tick() {
           }).join('')
         : '<div class="none"><b>Belum ada file.</b>Mulai dari /scout.</div>';
     }
-  }).catch(offline);
+  }).catch(function (err) { console.error(err); offline(err); });
 }
 
 tick();
