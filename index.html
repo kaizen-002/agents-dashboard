@@ -1021,7 +1021,11 @@ function tick() {
           }).join('')
         : '<div class="none"><b>Belum ada file.</b>Mulai dari !scout di Discord.</div>';
     }
-  }).catch(function (err) { console.error(err); offline(err); });
+  }).catch(function (err) {
+    /* "login" is the expected redirect for a signed-out visitor, not an error */
+    if (err.message !== 'login') console.error(err);
+    offline(err);
+  });
 }
 
 tick();
