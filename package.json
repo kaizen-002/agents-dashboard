@@ -1,0 +1,5 @@
+{
+  "name": "kurator-web",
+  "private": true,
+  "type": "module"
+}
