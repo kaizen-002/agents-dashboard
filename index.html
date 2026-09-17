@@ -305,10 +305,18 @@ var everLoaded = false;
    drawn into a square cell, with pale walkways between the doors like the reference station.
    Positions in ROOMS are picture pixels (0-600). The engine works in units where a room is 200 wide,
    so one unit is three picture pixels. Agents, bubbles, glow and animation are drawn live on top,
-   at screen resolution. */
+   at screen resolution.
+   Two layouts: 4 across and 2 down fills a wide panel; 2 across and 4 down on a phone. Neighbours
+   only connect where both pictures have a door on the facing wall. */
 
 var S = 200, GAP = 30, M = 14, STEP = S + GAP;
-var LW = M * 2 + S * 3 + GAP * 2, LH = LW;
+var LAYOUTS = {
+  wide: { cols: 4, rows: 2, at: { 'lore-scout': [0, 0], hub: [1, 0], 'script-writer': [2, 0], fetcher: [3, 0],
+                                  'asset-lister': [0, 1], editor: [1, 1], watcher: [2, 1], checker: [3, 1] } },
+  tall: { cols: 2, rows: 4, at: { 'lore-scout': [0, 0], hub: [1, 0], 'asset-lister': [0, 1], editor: [1, 1],
+                                  'script-writer': [0, 2], watcher: [1, 2], fetcher: [0, 3], checker: [1, 3] } }
+};
+var LAYOUT = null, COLS = 4, ROWS = 2, LW = 0, LH = 0;
 var FRAME = 6;               /* the neon frame line sits 18 picture px inside every picture */
 var WALK = 22;               /* walkway width */
 var DOOR_MID = 290 / 3;      /* side doors sit in the middle of the wall */
@@ -318,54 +326,54 @@ var LAMPS = [[45, 55], [555, 55], [45, 550], [555, 550]];
    seat, err and idle run from J to the spot. Each step is a straight line, horizontal first,
    laid out around the furniture in that picture. */
 var ROOMS = [
-  { id: 'lore-scout', c: 0, r: 0, name: 'ARSIP', img: 'arsip', tint: '#ce86ef',
+  { id: 'lore-scout', name: 'ARSIP', img: 'arsip', tint: '#ce86ef',
     J: [300, 185],
     doors: { right: [[525, 290], [400, 290], [400, 185]], down: [[300, 520], [300, 445], [180, 445], [180, 185]] },
     seat: [[150, 185], [150, 165]], err: [[180, 185], [180, 300]],
     screens: [[80, 75, 40, 55], [125, 70, 60, 35]] },
 
-  { id: 'hub', c: 1, r: 0, name: 'JEMBATAN', img: 'jembatan', tint: '#ff9d3c',
+  { id: 'hub', name: 'JEMBATAN', img: 'jembatan', tint: '#ff9d3c',
     J: [300, 470],
     doors: { left: [[75, 290], [160, 290], [160, 470]], right: [[525, 290], [440, 290], [440, 470]], down: [[300, 520]] },
     idle: [[125, 478], [475, 478], [230, 470], [370, 470], [300, 505], [160, 350], [440, 350], [205, 505], [395, 505]] },
 
-  { id: 'script-writer', c: 2, r: 0, name: 'NASKAH', img: 'naskah', tint: '#9dffd3',
+  { id: 'script-writer', name: 'NASKAH', img: 'naskah', tint: '#9dffd3',
     J: [300, 190],
-    doors: { left: [[75, 290], [180, 290], [180, 190]], down: [[300, 520], [300, 445], [180, 445], [180, 190]] },
+    doors: { left: [[75, 290], [180, 290], [180, 190]], right: [[525, 290], [400, 290], [400, 190]], down: [[300, 520], [300, 445], [180, 445], [180, 190]] },
     seat: [[160, 190], [160, 170]], err: [[180, 190], [180, 330]],
     screens: [[82, 82, 32, 50], [122, 68, 62, 40]] },
 
-  { id: 'asset-lister', c: 0, r: 1, name: 'GUDANG', img: 'gudang', tint: '#fef194',
+  { id: 'asset-lister', name: 'GUDANG', img: 'gudang', tint: '#fef194',
     J: [300, 185],
     doors: { up: [[300, 120]], right: [[525, 290], [430, 290], [430, 185]], down: [[300, 520], [300, 430], [205, 430], [205, 185]] },
     seat: [[140, 185], [140, 162]], err: [[205, 185], [205, 300]],
     screens: [[78, 92, 55, 38]] },
 
-  { id: 'editor', c: 1, r: 1, name: 'STUDIO', img: 'studio', tint: '#82ffa7',
+  { id: 'editor', name: 'STUDIO', img: 'studio', tint: '#82ffa7',
     J: [300, 178],
     doors: { up: [[300, 120]], left: [[75, 290], [92, 290], [92, 178]], right: [[525, 290], [450, 290], [450, 178]], down: [[300, 520], [300, 432], [234, 432], [234, 178]] },
     seat: [[150, 178], [150, 168]], err: [[234, 178], [234, 432], [300, 432]],
     screens: [[126, 36, 54, 24], [80, 72, 40, 42], [126, 72, 54, 38], [186, 72, 40, 42], [122, 250, 88, 50]] },
 
-  { id: 'watcher', c: 2, r: 1, name: 'BIOSKOP', img: 'bioskop', tint: '#83fffd',
+  { id: 'watcher', name: 'BIOSKOP', img: 'bioskop', tint: '#83fffd',
     J: [300, 185],
-    doors: { up: [[300, 165]], left: [[75, 290], [160, 290], [160, 185]] },
+    doors: { up: [[300, 165]], left: [[75, 290], [160, 290], [160, 185]], right: [[525, 290], [440, 290], [440, 185]],
+             down: [[300, 520], [300, 440], [160, 440], [160, 185]] },
     seat: [[160, 185], [160, 283], [300, 283], [300, 322]], err: [[160, 185], [160, 400]],
     screens: [[76, 92, 44, 38], [126, 92, 26, 30]] },
 
-  { id: 'fetcher', c: 0, r: 2, name: 'DOK DATA', img: 'dokdata', tint: '#fc9ff7',
+  { id: 'fetcher', name: 'DOK DATA', img: 'dokdata', tint: '#fc9ff7',
     J: [300, 195],
-    doors: { up: [[300, 175]], right: [[525, 290], [490, 290], [490, 195]] },
+    doors: { up: [[300, 175]], left: [[75, 290], [160, 290], [160, 195]], right: [[525, 290], [490, 290], [490, 195]],
+             down: [[300, 520], [300, 490], [170, 490], [170, 195]] },
     seat: [[120, 195], [120, 168]], err: [[150, 195], [150, 330]],
     screens: [[76, 92, 48, 38], [130, 92, 26, 32]] },
 
-  { id: 'checker', c: 1, r: 2, name: 'LAB', img: 'lab', tint: '#75fbe3',
+  { id: 'checker', name: 'LAB', img: 'lab', tint: '#75fbe3',
     J: [300, 180],
     doors: { up: [[300, 150]], left: [[75, 290], [160, 290], [160, 180]] },
     seat: [[115, 180], [115, 168]], err: [[160, 180], [160, 400]],
-    screens: [[78, 92, 36, 38], [130, 92, 22, 30]] },
-
-  { id: 'empty', c: 2, r: 2, name: 'RUANG KOSONG', kind: 'empty', tint: '#6b6f7a' }
+    screens: [[78, 92, 36, 38], [130, 92, 22, 30]] }
 ];
 
 var OPP = { left: 'right', right: 'left', up: 'down', down: 'up' };
@@ -384,8 +392,7 @@ function corners(list) {
 }
 
 ROOMS.forEach(function (rm, i) {
-  rm.i = i; rm.x = M + rm.c * STEP; rm.y = M + rm.r * STEP;
-  if (rm.kind === 'empty') return;
+  rm.i = i;
   var J = rm.Jp = unit(rm.J);
   rm.door = {};
   Object.keys(rm.doors).forEach(function (side) {
@@ -401,7 +408,24 @@ function roomById(id) { for (var i = 0; i < ROOMS.length; i++) if (ROOMS[i].id =
 function roomAtCell(c, r) { for (var i = 0; i < ROOMS.length; i++) if (ROOMS[i].c === c && ROOMS[i].r === r) return ROOMS[i]; return null; }
 function roomAtPoint(x, y) {
   var c = Math.floor((x - M + GAP / 2) / STEP), r = Math.floor((y - M + GAP / 2) / STEP);
-  return roomAtCell(Math.max(0, Math.min(2, c)), Math.max(0, Math.min(2, r)));
+  return roomAtCell(Math.max(0, Math.min(COLS - 1, c)), Math.max(0, Math.min(ROWS - 1, r)));
+}
+
+/* place every room for a layout; agents jump to where they belong instead of walking through walls */
+function applyLayout(name) {
+  var L = LAYOUTS[name];
+  LAYOUT = name; COLS = L.cols; ROWS = L.rows;
+  LW = M * 2 + S * COLS + GAP * (COLS - 1); LH = M * 2 + S * ROWS + GAP * (ROWS - 1);
+  ROOMS.forEach(function (rm) {
+    rm.c = L.at[rm.id][0]; rm.r = L.at[rm.id][1];
+    rm.x = M + rm.c * STEP; rm.y = M + rm.r * STEP;
+  });
+  PACKET = {};
+  Object.keys(cast).forEach(function (k) {
+    var a = cast[k], gl = goal(a), end = gl.path[gl.path.length - 1];
+    a.room = gl.room; a.back = gl.path.slice().reverse(); a.path = [];
+    a.x = gl.room.x + end[0]; a.y = gl.room.y + end[1]; a.goalKey = gl.key;
+  });
 }
 function sideOf(a, b) { return b.c > a.c ? 'right' : b.c < a.c ? 'left' : b.r > a.r ? 'down' : 'up'; }
 function linked(a, b) {
@@ -410,6 +434,7 @@ function linked(a, b) {
   return !!(a.door[side] && b.door[OPP[side]]);
 }
 function abs(rm, p) { return [rm.x + p[0], rm.y + p[1]]; }
+applyLayout('wide');                      /* fit() switches to the phone layout when the panel is narrow */
 
 /* ================= colour helpers ================= */
 
@@ -521,17 +546,6 @@ function paintStatic() {
 
   ROOMS.forEach(function (rm) {
     var x = rm.x * K, y = rm.y * K, s = S * K;
-    if (rm.kind === 'empty') {
-      /* the unbuilt bay: a plain grey plate, like the empty lot in the reference */
-      roundRectPath(g, x + FRAME * K, y + FRAME * K, (S - FRAME * 2) * K, (S - FRAME * 2) * K, 13 * K);
-      g.fillStyle = '#1e1d23'; g.fill();
-      g.lineWidth = Math.max(1, 1.4 * K); g.strokeStyle = '#3f3d48'; g.stroke();
-      g.save(); g.clip();
-      g.strokeStyle = 'rgba(255,255,255,0.025)'; g.lineWidth = Math.max(1, 4 * K);
-      for (var d = -S; d < S * 2; d += 22) { g.beginPath(); g.moveTo(x + d * K, y); g.lineTo(x + (d - S) * K, y + s); g.stroke(); }
-      g.restore();
-      return;
-    }
     var im = IMG[rm.id];
     g.save();
     roundRectPath(g, x + 2.5 * K, y + 2.5 * K, s - 5 * K, s - 5 * K, 17 * K);
@@ -571,10 +585,9 @@ function paintStatic() {
   ROOMS.forEach(function (rm) {
     var u = TU, label = rm.name, tw = textWidth(label, u);
     var tx = Math.round((rm.x + 22) * K), ty = Math.round((rm.y + S - FRAME - 2) * K) - 9 * u;
-    var empty = rm.kind === 'empty';
     g.fillStyle = 'rgba(7,8,12,0.88)'; g.fillRect(tx - 3 * u, ty - 2 * u, tw + 6 * u, 11 * u);
-    g.fillStyle = empty ? '#3f3d48' : rm.tint; g.fillRect(tx - 3 * u, ty + 9 * u - Math.max(1, Math.round(u / 2)), tw + 6 * u, Math.max(1, Math.round(u / 2)));
-    text(g, label, tx, ty, empty ? '#8a8793' : mix(rm.tint, '#ffffff', 0.4), u);
+    g.fillStyle = rm.tint; g.fillRect(tx - 3 * u, ty + 9 * u - Math.max(1, Math.round(u / 2)), tw + 6 * u, Math.max(1, Math.round(u / 2)));
+    text(g, label, tx, ty, mix(rm.tint, '#ffffff', 0.4), u);
   });
 
   return cv;
@@ -1128,7 +1141,6 @@ function drawLive(g, now) {
   g.globalCompositeOperation = 'lighter';
 
   ROOMS.forEach(function (rm) {
-    if (rm.kind === 'empty') return;
     var a = cast[rm.id], work = !!(a && a.state === 'working'), err = !!(a && a.state === 'error');
     var v = rgb(rm.tint).join(','), blink = Math.floor(now / 400) % 2;
 
@@ -1173,7 +1185,6 @@ function drawGlow(g, now) {
   g.save();
   g.globalCompositeOperation = 'lighter';
   ROOMS.forEach(function (rm) {
-    if (rm.kind === 'empty') return;
     var a = cast[rm.id], col = rm.tint, alpha = 0.3 + 0.07 * Math.sin(t / 1100 + rm.i);
     if (a && a.state === 'working') alpha = 0.65 + 0.15 * Math.sin(t / 240 + rm.i);
     if (a && a.state === 'error') { col = '#ff4040'; alpha = Math.floor(now / 400) % 2 ? 1 : 0.2; }
@@ -1198,20 +1209,24 @@ var canvas = document.getElementById('station'), ctx = canvas.getContext('2d');
 var BG = null, K = 1, SU = 1, TU = 2, lastFrame = performance.now();
 var CALM = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-/* the canvas matches the screen pixel for pixel; the map is as wide as the panel, but never taller than the window */
+/* The canvas matches the screen pixel for pixel. A wide panel gets 4x2 rooms filling its width
+   (never taller than the window); a narrow one (phones) gets 2x4 at full width. */
 function fit() {
   var box = document.getElementById('world');
   var pad = (parseFloat(getComputedStyle(box).paddingLeft) || 0) * 2;
-  var css = Math.floor(Math.min(box.clientWidth - pad, Math.max(320, window.innerHeight - 150)));
-  if (css < 60) return;                     /* hidden or not laid out yet; the resize observer calls again */
+  var avail = Math.floor(box.clientWidth - pad);
+  if (avail < 60) return;                   /* hidden or not laid out yet; the resize observer calls again */
+  var want = avail >= 640 ? 'wide' : 'tall';
+  if (want !== LAYOUT) { applyLayout(want); BG = null; }
+  var css = LAYOUT === 'wide' ? Math.min(avail, Math.floor(Math.max(300, window.innerHeight - 150) * LW / LH)) : avail;
   var dpr = window.devicePixelRatio || 1;
-  var dev = Math.round(css * dpr);
-  if (canvas.width === dev && BG) return;
+  var dev = Math.round(css * dpr), devH = Math.round(dev * LH / LW);
+  if (canvas.width === dev && canvas.height === devH && BG) return;
   K = dev / LW;
   SU = Math.max(1, Math.round(K));
   TU = Math.max(1, Math.round(Math.max(dpr * 1.2, K * 0.75)));
-  canvas.width = dev; canvas.height = dev;
-  canvas.style.width = css + 'px'; canvas.style.height = css + 'px';
+  canvas.width = dev; canvas.height = devH;
+  canvas.style.width = css + 'px'; canvas.style.height = Math.round(css * LH / LW) + 'px';
   BG = null;
 }
 
