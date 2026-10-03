@@ -12,7 +12,7 @@ const NAME = /^[a-z0-9][a-z0-9._-]{0,120}$/;
 const headers = key => key.startsWith('eyJ') ? { apikey: key, authorization: 'Bearer ' + key } : { apikey: key };
 
 const YOUTUBE = /^https:\/\/(www\.|m\.)?(youtube\.com\/(watch\?v=[\w-]{11}[^\s]*|live\/[\w-]{11}[^\s]*)|youtu\.be\/[\w-]{11}[^\s]*)$/;
-const ENUMS = { format: ['vertical', 'square', 'landscape'], style: ['kuning', 'tegas', 'kotak'], language: ['id', 'en'] };
+const ENUMS = { format: ['vertical', 'square', 'landscape'], style: ['kuning', 'tegas', 'komik', 'gemuk', 'bioskop', 'sorot', 'merah', 'neon', 'santai', 'kotak'], language: ['id', 'en'] };
 
 /* A clip job from the phone, checked field by field, then left in the bucket's inbox/ for Kurator. Only the known
    fields are kept, so nothing else from the request body ever reaches the laptop. */
@@ -25,7 +25,7 @@ function jobFrom(body) {
   if (body?.type !== 'clip') return null;
   const url = String(body.url || '').trim();
   if (!YOUTUBE.test(url) || url.length > 200) return null;
-  const job = { type: 'clip', url, clips: Math.min(5, Math.max(1, Number(body.clips) || 3)) };
+  const job = { type: 'clip', url, clips: Math.min(3, Math.max(1, Number(body.clips) || 3)) };
   for (const [key, allowed] of Object.entries(ENUMS)) {
     const value = String(body[key] || allowed[0]);
     if (!allowed.includes(value)) return null;
